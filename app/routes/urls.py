@@ -48,11 +48,14 @@ def delete_url(short_code: str, db: Session = Depends(get_db)):
 
 @router.get("/{short_code}")
 def redirect(short_code: str, request: Request, db: Session = Depends(get_db)):
-    url = url_service.resolve_url(db, short_code)
-    if not url:
+    target = url_service.resolve_url(db, short_code)
+    if not target:
         raise HTTPException(status_code=404, detail="Short URL not found.")
+    url_id, original_url = target
+
     referrer = request.headers.get("referer")
     user_agent = request.headers.get("user-agent")
     ip = request.client.host if request.client else None
-    url_service.record_click(db, url, referrer, user_agent, ip)
-    return RedirectResponse(url=url.original_url, status_code=301)
+    url_service.record_click(db, url_id, referrer, user_agent, ip)
+
+    return RedirectResponse(url=original_url, status_code=302)

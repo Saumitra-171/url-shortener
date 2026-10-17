@@ -1,67 +1,71 @@
-import random
+import json
+import secrets
 import string
 from datetime import datetime, timezone
 
-from sqlalchemy.orm import Session
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.cache import cache_get, cache_set, cache_delete
-from app.models.url import URL
 from app.models.click import Click
-
+from app.models.url import URL
 
 ALPHABET = string.ascii_letters + string.digits
 
 
 def _generate_code(length: int = 6) -> str:
-    return "".join(random.choices(ALPHABET, k=length))
+    return "".join(secrets.choice(ALPHABET) for _ in range(length))
+
+
+def _cache_payload(url: URL) -> str:
+    return json.dumps({"id": url.id, "url": url.original_url})
 
 
 def create_short_url(db: Session, original_url: str) -> URL:
     for _ in range(5):
-        code = _generate_code()
-        exists = db.scalar(select(URL).where(URL.short_code == code))
-        if not exists:
-            break
-    else:
-        raise RuntimeError("Failed to generate unique short code — please retry.")
-
-    url = URL(short_code=code, original_url=original_url)
-    db.add(url)
-    db.commit()
-    db.refresh(url)
-
-    # Warm the cache immediately after creation
-    cache_set(f"url:{code}", original_url)
-    return url
+        url = URL(short_code=_generate_code(), original_url=original_url)
+        db.add(url)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()  # required: the session is unusable after a failed commit
+            continue
+        db.refresh(url)
+        cache_set(f"url:{url.short_code}", _cache_payload(url))
+        return url
+    raise RuntimeError("Could not generate a unique short code, please retry.")
 
 
-def resolve_url(db: Session, short_code: str) -> URL | None:
-    # Check Redis first
+def resolve_url(db: Session, short_code: str) -> tuple[int, str] | None:
+    """Return (url_id, original_url) or None. Hits Redis first."""
     cached = cache_get(f"url:{short_code}")
     if cached:
-        # Still need the DB row to record the click
-        return db.scalar(select(URL).where(URL.short_code == short_code))
+        data = json.loads(cached)
+        return data["id"], data["url"]
 
-    # Cache miss — go to Postgres
     url = db.scalar(select(URL).where(URL.short_code == short_code))
-    if url:
-        cache_set(f"url:{short_code}", url.original_url)
-    return url
+    if not url:
+        return None
+    cache_set(f"url:{short_code}", _cache_payload(url))
+    return url.id, url.original_url
 
 
-def record_click(db: Session, url: URL, referrer: str | None, user_agent: str | None, ip_address: str | None):
+def record_click(
+    db: Session,
+    url_id: int,
+    referrer: str | None,
+    user_agent: str | None,
+    ip_address: str | None,
+):
     now = datetime.now(timezone.utc)
     db.execute(
         update(URL)
-        .where(URL.id == url.id)
+        .where(URL.id == url_id)
         .values(click_count=URL.click_count + 1, last_clicked_at=now)
     )
-    click = Click(url_id=url.id, referrer=referrer, user_agent=user_agent, ip_address=ip_address)
-    db.add(click)
+    db.add(Click(url_id=url_id, referrer=referrer, user_agent=user_agent, ip_address=ip_address))
     db.commit()
-
 
 def get_analytics(db: Session, short_code: str) -> tuple[URL, list[Click]] | None:
     url = db.scalar(select(URL).where(URL.short_code == short_code))
