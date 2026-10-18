@@ -8,7 +8,15 @@ from app.core.database import Base, get_db
 from app.main import app
 from app.models import click, url  # noqa: F401  (registers models on Base.metadata)
 from app.services import url_service
+from app.models import click, url, user  # noqa: F401  (registers models on Base.metadata)
 
+import os
+
+# Set BEFORE the app is imported. Direct assignment (not setdefault) guarantees tests
+# can never touch your real Postgres or Redis, even if .env points at them.
+os.environ["DATABASE_URL"] = "sqlite://"
+os.environ["REDIS_URL"] = "redis://localhost:6379/15"
+os.environ["SECRET_KEY"] = "test-secret-key-not-for-production"
 
 @pytest.fixture()
 def session_factory():

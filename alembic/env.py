@@ -6,6 +6,7 @@ from sqlalchemy import engine_from_config, pool
 from app.core.config import settings
 from app.core.database import Base
 from app.models import click, url  # noqa: F401  (importing registers the models on Base.metadata)
+from app.models import click, url, user  # noqa: F401
 
 config = context.config
 
