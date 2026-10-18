@@ -22,21 +22,6 @@ def _cache_payload(url: URL) -> str:
     return json.dumps({"id": url.id, "url": url.original_url})
 
 
-def create_short_url(db: Session, original_url: str) -> URL:
-    for _ in range(5):
-        url = URL(short_code=_generate_code(), original_url=original_url)
-        db.add(url)
-        try:
-            db.commit()
-        except IntegrityError:
-            db.rollback()  # required: the session is unusable after a failed commit
-            continue
-        db.refresh(url)
-        cache_set(f"url:{url.short_code}", _cache_payload(url))
-        return url
-    raise RuntimeError("Could not generate a unique short code, please retry.")
-
-
 def resolve_url(db: Session, short_code: str) -> tuple[int, str] | None:
     """Return (url_id, original_url) or None. Hits Redis first."""
     cached = cache_get(f"url:{short_code}")
@@ -67,8 +52,23 @@ def record_click(
     db.add(Click(url_id=url_id, referrer=referrer, user_agent=user_agent, ip_address=ip_address))
     db.commit()
 
-def get_analytics(db: Session, short_code: str) -> tuple[URL, list[Click]] | None:
-    url = db.scalar(select(URL).where(URL.short_code == short_code))
+def create_short_url(db: Session, original_url: str, owner_id: int) -> URL:
+    for _ in range(5):
+        url = URL(short_code=_generate_code(), original_url=original_url, owner_id=owner_id)
+        db.add(url)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            continue
+        db.refresh(url)
+        cache_set(f"url:{url.short_code}", _cache_payload(url))
+        return url
+    raise RuntimeError("Could not generate a unique short code, please retry.")
+
+
+def get_analytics(db: Session, short_code: str, owner_id: int) -> tuple[URL, list[Click]] | None:
+    url = db.scalar(select(URL).where(URL.short_code == short_code, URL.owner_id == owner_id))
     if not url:
         return None
     recent_clicks = db.scalars(
@@ -77,12 +77,11 @@ def get_analytics(db: Session, short_code: str) -> tuple[URL, list[Click]] | Non
     return url, list(recent_clicks)
 
 
-def delete_url(db: Session, short_code: str) -> bool:
-    url = db.scalar(select(URL).where(URL.short_code == short_code))
+def delete_url(db: Session, short_code: str, owner_id: int) -> bool:
+    url = db.scalar(select(URL).where(URL.short_code == short_code, URL.owner_id == owner_id))
     if not url:
         return False
     db.delete(url)
     db.commit()
-    # Invalidate cache on delete
     cache_delete(f"url:{short_code}")
     return True

@@ -6,6 +6,11 @@ import jwt
 from app.core.config import settings
 
 ALGORITHM = "HS256"
+BCRYPT_ROUNDS = 12  # work factor: each +1 doubles the time. Tests lower it.
+
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode()
 
 
 def hash_password(password: str) -> str:

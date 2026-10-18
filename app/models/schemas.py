@@ -44,3 +44,37 @@ class ClickDetail(BaseModel):
 class AnalyticsResponse(BaseModel):
     stats: URLStats
     recent_clicks: list[ClickDetail]
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        v = v.strip().lower()  # normalize so Alice@x.com and alice@x.com are one account
+        if not validators.email(v):
+            raise ValueError("Invalid email address.")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters.")
+        if len(v.encode()) > 72:  # bcrypt ignores or rejects anything beyond 72 bytes
+            raise ValueError("Password must be at most 72 bytes.")
+        return v
+
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"

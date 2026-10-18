@@ -1,15 +1,3 @@
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-
-from app.core.database import Base, get_db
-from app.main import app
-from app.models import click, url  # noqa: F401  (registers models on Base.metadata)
-from app.services import url_service
-from app.models import click, url, user  # noqa: F401  (registers models on Base.metadata)
-
 import os
 
 # Set BEFORE the app is imported. Direct assignment (not setdefault) guarantees tests
@@ -17,6 +5,19 @@ import os
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["REDIS_URL"] = "redis://localhost:6379/15"
 os.environ["SECRET_KEY"] = "test-secret-key-not-for-production"
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.core import security
+from app.core.database import Base, get_db
+from app.main import app
+from app.models import click, url, user  # noqa: F401  (registers models on Base.metadata)
+from app.services import url_service
+
 
 @pytest.fixture()
 def session_factory():
@@ -49,6 +50,12 @@ def fake_cache(monkeypatch):
     return store
 
 
+@pytest.fixture(autouse=True)
+def fast_hashing(monkeypatch):
+    # bcrypt is slow on purpose. Minimum cost keeps the suite fast.
+    monkeypatch.setattr(security, "BCRYPT_ROUNDS", 4)
+
+
 @pytest.fixture()
 def client(session_factory):
     def override_get_db():
@@ -62,3 +69,19 @@ def client(session_factory):
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+def register_and_login(client, email, password="password123"):
+    client.post("/auth/register", json={"email": email, "password": password})
+    response = client.post("/auth/login", data={"username": email, "password": password})
+    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
+@pytest.fixture()
+def auth_headers(client):
+    return register_and_login(client, "alice@example.com")
+
+
+@pytest.fixture()
+def other_headers(client):
+    return register_and_login(client, "bob@example.com")
