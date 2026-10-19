@@ -25,13 +25,14 @@ def test_invalid_url_rejected(client, auth_headers):
     assert response.status_code == 422
 
 
-def test_redirect_is_302_and_counts_click(client, auth_headers):
+def test_redirect_is_302_and_counts_click(client, auth_headers, flush_clicks):
     code = make_url(client, auth_headers)["short_code"]
 
     response = client.get(f"/{code}", follow_redirects=False)  # public, no headers
 
     assert response.status_code == 302
     assert response.headers["location"] == "https://example.com"
+    flush_clicks()  # clicks are recorded asynchronously now
     stats = client.get(f"/{code}/analytics", headers=auth_headers).json()["stats"]
     assert stats["click_count"] == 1
 
@@ -40,9 +41,10 @@ def test_unknown_code_returns_404(client):
     assert client.get("/nope123", follow_redirects=False).status_code == 404
 
 
-def test_delete_removes_url_and_its_clicks(client, auth_headers, session_factory):
+def test_delete_removes_url_and_its_clicks(client, auth_headers, session_factory, flush_clicks):
     code = make_url(client, auth_headers)["short_code"]
-    client.get(f"/{code}", follow_redirects=False)  # creates a click row
+    client.get(f"/{code}", follow_redirects=False)
+    flush_clicks()  # make sure a click row really exists before deleting
 
     assert client.delete(f"/{code}", headers=auth_headers).status_code == 204
 

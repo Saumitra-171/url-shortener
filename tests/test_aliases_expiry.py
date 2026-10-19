@@ -70,9 +70,10 @@ def test_expired_link_returns_410_from_database(client, auth_headers, fake_cache
     assert client.get("/soon", follow_redirects=False).status_code == 410
 
 
-def test_owner_can_still_see_analytics_after_expiry(client, auth_headers, monkeypatch):
+def test_owner_can_still_see_analytics_after_expiry(client, auth_headers, monkeypatch, flush_clicks):
     post(client, auth_headers, alias="soon", expires_at=iso(hours=1))
     client.get("/soon", follow_redirects=False)  # one real click
+    flush_clicks()
 
     jump_forward(monkeypatch, hours=2)
     assert client.get("/soon", follow_redirects=False).status_code == 410

@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     redis_url: str = ""
     secret_key: str  # no default on purpose: the app refuses to start without one
     access_token_expire_minutes: int = 60
+    run_click_worker: bool = True
 
 
 settings = Settings()

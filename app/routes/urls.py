@@ -13,7 +13,7 @@ from app.models.schemas import (
     URLStats,
 )
 from app.models.user import User
-from app.services import url_service
+from app.services import click_worker, url_service
 
 from app.core.rate_limit import limit_by_user
 
@@ -84,6 +84,8 @@ def redirect(short_code: str, request: Request, db: Session = Depends(get_db)):
     referrer = request.headers.get("referer")
     user_agent = request.headers.get("user-agent")
     ip = request.client.host if request.client else None
-    url_service.record_click(db, url_id, referrer, user_agent, ip)
+    if not click_worker.enqueue_click(url_id, referrer, user_agent, ip):
+    # Redis is down: fall back to the old synchronous write so the click is not lost.
+        url_service.record_click(db, url_id, referrer, user_agent, ip)
 
     return RedirectResponse(url=original_url, status_code=302)

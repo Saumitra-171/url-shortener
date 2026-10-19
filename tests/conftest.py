@@ -17,10 +17,15 @@ from app.core.database import Base, get_db
 from app.main import app
 from app.models import click, url, user  # noqa: F401  (registers models on Base.metadata)
 from app.services import url_service
+from app.services import click_worker
+from app.services.click_worker import ClickWorker
 
 import fakeredis
 
 from app.core import rate_limit
+
+
+os.environ["RUN_CLICK_WORKER"] = "false"  # tests drain the queue explicitly, no background thread
 
 
 @pytest.fixture()
@@ -92,8 +97,14 @@ def other_headers(client):
 
 @pytest.fixture(autouse=True)
 def fake_redis(monkeypatch):
-    # A fresh, private fake server per test, so limits never leak between tests.
-    server = fakeredis.FakeServer()
-    monkeypatch.setattr(
-        rate_limit, "redis_client", fakeredis.FakeRedis(server=server, decode_responses=True)
-    )
+    # A fresh, private fake server per test, so state never leaks between tests.
+    fake = fakeredis.FakeRedis(server=fakeredis.FakeServer(), decode_responses=True)
+    monkeypatch.setattr(rate_limit, "redis_client", fake)
+    monkeypatch.setattr(click_worker, "redis_client", fake)
+    return fake
+
+@pytest.fixture()
+def flush_clicks(session_factory):
+    def _flush():
+        ClickWorker(session_factory, backoff_base=0).drain()
+    return _flush
