@@ -15,10 +15,12 @@ from app.models.schemas import (
 from app.models.user import User
 from app.services import url_service
 
+from app.core.rate_limit import limit_by_user
+
 router = APIRouter()
 
 
-@router.post("/shorten", response_model=ShortenResponse, status_code=201)
+@router.post("/shorten", response_model=ShortenResponse, status_code=201, dependencies=[Depends(limit_by_user("shorten", 10, 60))],)
 def shorten_url(
     payload: ShortenRequest,
     db: Session = Depends(get_db),

@@ -18,6 +18,10 @@ from app.main import app
 from app.models import click, url, user  # noqa: F401  (registers models on Base.metadata)
 from app.services import url_service
 
+import fakeredis
+
+from app.core import rate_limit
+
 
 @pytest.fixture()
 def session_factory():
@@ -85,3 +89,11 @@ def auth_headers(client):
 @pytest.fixture()
 def other_headers(client):
     return register_and_login(client, "bob@example.com")
+
+@pytest.fixture(autouse=True)
+def fake_redis(monkeypatch):
+    # A fresh, private fake server per test, so limits never leak between tests.
+    server = fakeredis.FakeServer()
+    monkeypatch.setattr(
+        rate_limit, "redis_client", fakeredis.FakeRedis(server=server, decode_responses=True)
+    )

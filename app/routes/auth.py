@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.rate_limit import limit_by_ip
 from app.core.security import create_access_token
 from app.models.schemas import RegisterRequest, TokenResponse, UserResponse
 from app.models.user import User
@@ -12,7 +13,12 @@ from app.services import user_service
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-@router.post("/register", response_model=UserResponse, status_code=201)
+@router.post(
+    "/register",
+    response_model=UserResponse,
+    status_code=201,
+    dependencies=[Depends(limit_by_ip("register", 5, 60))],
+)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     user = user_service.create_user(db, payload.email, payload.password)
     if user is None:
@@ -20,7 +26,11 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     return user
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    dependencies=[Depends(limit_by_ip("login", 5, 60))],
+)
 def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     # The OAuth2 form calls the email field "username".
     user = user_service.authenticate(db, form.username.strip().lower(), form.password)
