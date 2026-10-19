@@ -20,20 +20,30 @@ from app.core.rate_limit import limit_by_user
 router = APIRouter()
 
 
-@router.post("/shorten", response_model=ShortenResponse, status_code=201, dependencies=[Depends(limit_by_user("shorten", 10, 60))],)
+@router.post(
+    "/shorten",
+    response_model=ShortenResponse,
+    status_code=201,
+    dependencies=[Depends(limit_by_user("shorten", 10, 60))],
+)
 def shorten_url(
     payload: ShortenRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    url = url_service.create_short_url(db, payload.url, current_user.id)
+    try:
+        url = url_service.create_short_url(
+            db, payload.url, current_user.id, alias=payload.alias, expires_at=payload.expires_at
+        )
+    except url_service.AliasTakenError:
+        raise HTTPException(status_code=409, detail="Alias already taken.")
     return ShortenResponse(
         short_code=url.short_code,
         short_url=f"{settings.base_url}/{url.short_code}",
         original_url=url.original_url,
         created_at=url.created_at,
+        expires_at=url.expires_at,
     )
-
 
 @router.get("/{short_code}/analytics", response_model=AnalyticsResponse)
 def get_analytics(
@@ -63,7 +73,10 @@ def delete_url(
 
 @router.get("/{short_code}")  # intentionally public: anyone with the link can follow it
 def redirect(short_code: str, request: Request, db: Session = Depends(get_db)):
-    target = url_service.resolve_url(db, short_code)
+    try:
+        target = url_service.resolve_url(db, short_code)
+    except url_service.LinkExpired:
+        raise HTTPException(status_code=410, detail="This link has expired.")
     if not target:
         raise HTTPException(status_code=404, detail="Short URL not found.")
     url_id, original_url = target

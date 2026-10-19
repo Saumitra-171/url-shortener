@@ -7,11 +7,32 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.cache import cache_get, cache_set, cache_delete
+from app.core.cache import CACHE_TTL, cache_delete, cache_get, cache_set
+from app.core.constants import RESERVED_CODES
 from app.models.click import Click
 from app.models.url import URL
 
 ALPHABET = string.ascii_letters + string.digits
+
+
+class AliasTakenError(Exception):
+    pass
+
+
+class LinkExpired(Exception):
+    pass
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)  # a function so tests can move the clock
+
+
+def _as_utc(dt: datetime | None) -> datetime | None:
+    # Postgres returns timezone-aware datetimes, but SQLite (used in tests) returns naive ones.
+    # Comparing the two raises TypeError, so normalise before comparing.
+    if dt is not None and dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 def _generate_code(length: int = 6) -> str:
@@ -19,20 +40,75 @@ def _generate_code(length: int = 6) -> str:
 
 
 def _cache_payload(url: URL) -> str:
-    return json.dumps({"id": url.id, "url": url.original_url})
+    exp = _as_utc(url.expires_at)
+    return json.dumps({
+        "id": url.id,
+        "url": url.original_url,
+        "exp": exp.timestamp() if exp else None,
+    })
+
+
+def _cache_url(url: URL) -> None:
+    ttl = CACHE_TTL
+    exp = _as_utc(url.expires_at)
+    if exp is not None:
+        remaining = int((exp - _now()).total_seconds())
+        if remaining <= 0:
+            return  # already expired: don't cache it at all
+        ttl = min(CACHE_TTL, remaining)  # Redis evicts the entry no later than the expiry
+    cache_set(f"url:{url.short_code}", _cache_payload(url), ttl)
+
+
+def _try_insert(db: Session, code: str, original_url: str, owner_id: int,
+                expires_at: datetime | None) -> URL | None:
+    url = URL(short_code=code, original_url=original_url, owner_id=owner_id, expires_at=expires_at)
+    db.add(url)
+    try:
+        db.commit()
+    except IntegrityError:  # the unique constraint is the real guard against duplicates
+        db.rollback()
+        return None
+    db.refresh(url)
+    return url
+
+
+def create_short_url(db: Session, original_url: str, owner_id: int,
+                     alias: str | None = None, expires_at: datetime | None = None) -> URL:
+    if alias is not None:
+        url = _try_insert(db, alias, original_url, owner_id, expires_at)
+        if url is None:
+            raise AliasTakenError(alias)
+        _cache_url(url)
+        return url
+
+    for _ in range(5):
+        code = _generate_code()
+        if code.lower() in RESERVED_CODES:
+            continue
+        url = _try_insert(db, code, original_url, owner_id, expires_at)
+        if url is not None:
+            _cache_url(url)
+            return url
+    raise RuntimeError("Could not generate a unique short code, please retry.")
 
 
 def resolve_url(db: Session, short_code: str) -> tuple[int, str] | None:
-    """Return (url_id, original_url) or None. Hits Redis first."""
+    """Return (url_id, original_url), None if unknown, or raise LinkExpired."""
     cached = cache_get(f"url:{short_code}")
     if cached:
         data = json.loads(cached)
+        # .get() because entries cached before expiry existed have no "exp" key
+        if data.get("exp") is not None and data["exp"] <= _now().timestamp():
+            raise LinkExpired(short_code)
         return data["id"], data["url"]
 
     url = db.scalar(select(URL).where(URL.short_code == short_code))
     if not url:
         return None
-    cache_set(f"url:{short_code}", _cache_payload(url))
+    exp = _as_utc(url.expires_at)
+    if exp is not None and exp <= _now():
+        raise LinkExpired(short_code)
+    _cache_url(url)
     return url.id, url.original_url
 
 
@@ -51,20 +127,6 @@ def record_click(
     )
     db.add(Click(url_id=url_id, referrer=referrer, user_agent=user_agent, ip_address=ip_address))
     db.commit()
-
-def create_short_url(db: Session, original_url: str, owner_id: int) -> URL:
-    for _ in range(5):
-        url = URL(short_code=_generate_code(), original_url=original_url, owner_id=owner_id)
-        db.add(url)
-        try:
-            db.commit()
-        except IntegrityError:
-            db.rollback()
-            continue
-        db.refresh(url)
-        cache_set(f"url:{url.short_code}", _cache_payload(url))
-        return url
-    raise RuntimeError("Could not generate a unique short code, please retry.")
 
 
 def get_analytics(db: Session, short_code: str, owner_id: int) -> tuple[URL, list[Click]] | None:

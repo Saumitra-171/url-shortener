@@ -1,16 +1,46 @@
-from datetime import datetime
 from pydantic import BaseModel, field_validator
 import validators
+import re
+from datetime import datetime, timezone
 
+from app.core.constants import RESERVED_CODES
+
+ALIAS_RE = re.compile(r"[A-Za-z0-9_-]{3,32}")
 
 class ShortenRequest(BaseModel):
     url: str
+    alias: str | None = None
+    expires_at: datetime | None = None
 
     @field_validator("url")
     @classmethod
     def validate_url(cls, v: str) -> str:
-        if not validators.url(v):
-            raise ValueError("Invalid URL provided.")
+        v = v.strip()
+        if len(v) > 2048 or not validators.url(v):
+            raise ValueError("Invalid URL.")
+        return v
+
+    @field_validator("alias")
+    @classmethod
+    def validate_alias(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        if not ALIAS_RE.fullmatch(v):
+            raise ValueError("Alias must be 3-32 characters: letters, digits, '-' or '_'.")
+        if v.lower() in RESERVED_CODES:
+            raise ValueError("That alias is reserved.")
+        return v
+
+    @field_validator("expires_at")
+    @classmethod
+    def validate_expiry(cls, v: datetime | None) -> datetime | None:
+        if v is None:
+            return v
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)  # a datetime with no zone is taken as UTC
+        v = v.astimezone(timezone.utc)  # store one canonical zone, whatever offset was sent
+        if v <= datetime.now(timezone.utc):
+            raise ValueError("expires_at must be in the future.")
         return v
 
 
@@ -19,7 +49,7 @@ class ShortenResponse(BaseModel):
     short_url: str
     original_url: str
     created_at: datetime
-
+    expires_at: datetime | None = None
     model_config = {"from_attributes": True}
 
 
@@ -29,7 +59,7 @@ class URLStats(BaseModel):
     click_count: int
     created_at: datetime
     last_clicked_at: datetime | None
-
+    expires_at: datetime | None = None
     model_config = {"from_attributes": True}
 
 
