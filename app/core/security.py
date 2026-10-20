@@ -10,14 +10,9 @@ BCRYPT_ROUNDS = 12  # work factor: each +1 doubles the time. Tests lower it.
 
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode()
-
-
-def hash_password(password: str) -> str:
     # bcrypt generates a random salt and embeds it in the hash. It is deliberately
     # slow, which makes brute-forcing a stolen database expensive.
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode()
 
 def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())

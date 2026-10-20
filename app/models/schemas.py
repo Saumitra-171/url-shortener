@@ -108,3 +108,26 @@ class UserResponse(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+class DayCount(BaseModel):
+    date: str
+    clicks: int
+
+
+class ReferrerCount(BaseModel):
+    referrer: str
+    clicks: int
+
+
+class BrowserCount(BaseModel):
+    browser: str
+    clicks: int
+
+
+class SummaryResponse(BaseModel):
+    short_code: str
+    days: int
+    total_clicks: int
+    clicks_per_day: list[DayCount]
+    top_referrers: list[ReferrerCount]
+    browsers: list[BrowserCount]

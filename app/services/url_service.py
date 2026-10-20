@@ -1,9 +1,9 @@
 import json
 import secrets
 import string
-from datetime import datetime, timezone
+from datetime import datetime, time, timedelta, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,10 @@ from app.core.cache import CACHE_TTL, cache_delete, cache_get, cache_set
 from app.core.constants import RESERVED_CODES
 from app.models.click import Click
 from app.models.url import URL
+from app.core.useragent import classify_browser
+
+from collections import Counter
+
 
 ALPHABET = string.ascii_letters + string.digits
 
@@ -147,3 +151,44 @@ def delete_url(db: Session, short_code: str, owner_id: int) -> bool:
     db.commit()
     cache_delete(f"url:{short_code}")
     return True
+
+def get_summary(db: Session, short_code: str, owner_id: int, days: int) -> dict | None:
+    url = db.scalar(select(URL).where(URL.short_code == short_code, URL.owner_id == owner_id))
+    if not url:
+        return None
+
+    first_day = _now().date() - timedelta(days=days - 1)
+    since = datetime.combine(first_day, time.min, tzinfo=timezone.utc)
+    in_window = and_(Click.url_id == url.id, Click.clicked_at >= since)
+
+    # Clicks per day. GROUP BY runs in the database, so at most `days` rows come back.
+    day = func.date(Click.clicked_at)
+    counts = {str(d): n for d, n in db.execute(select(day, func.count()).where(in_window).group_by(day))}
+    per_day = []
+    for i in range(days):  # fill the gaps: a day with no clicks must appear as 0
+        d = (first_day + timedelta(days=i)).isoformat()
+        per_day.append({"date": d, "clicks": counts.get(d, 0)})
+
+    # Top referrers, with "(direct)" standing in for clicks that had none.
+    referrer = func.coalesce(Click.referrer, "(direct)")
+    referrer_rows = db.execute(
+        select(referrer, func.count())
+        .where(in_window)
+        .group_by(referrer)
+        .order_by(func.count().desc(), referrer)
+        .limit(5)
+    ).all()
+
+    # Browsers: group by DISTINCT user agent in SQL, then classify each in Python.
+    browsers: Counter[str] = Counter()
+    for user_agent, n in db.execute(select(Click.user_agent, func.count()).where(in_window).group_by(Click.user_agent)):
+        browsers[classify_browser(user_agent)] += n
+
+    return {
+        "short_code": url.short_code,
+        "days": days,
+        "total_clicks": sum(d["clicks"] for d in per_day),
+        "clicks_per_day": per_day,
+        "top_referrers": [{"referrer": r, "clicks": n} for r, n in referrer_rows],
+        "browsers": [{"browser": b, "clicks": n} for b, n in browsers.most_common()],
+    }

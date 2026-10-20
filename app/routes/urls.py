@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,7 @@ from app.models.schemas import (
     ClickDetail,
     ShortenRequest,
     ShortenResponse,
+    SummaryResponse,
     URLStats,
 )
 from app.models.user import User
@@ -60,6 +61,17 @@ def get_analytics(
         recent_clicks=[ClickDetail.model_validate(c) for c in clicks],
     )
 
+@router.get("/{short_code}/analytics/summary", response_model=SummaryResponse)
+def get_analytics_summary(
+    short_code: str,
+    days: int = Query(30, ge=1, le=90),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = url_service.get_summary(db, short_code, current_user.id, days)
+    if not result:
+        raise HTTPException(status_code=404, detail="Short URL not found.")
+    return result
 
 @router.delete("/{short_code}", status_code=204)
 def delete_url(

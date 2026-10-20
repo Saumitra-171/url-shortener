@@ -1,11 +1,12 @@
 from datetime import datetime
-from sqlalchemy import String, Integer, DateTime, ForeignKey, func
+from sqlalchemy import String, Integer, DateTime, ForeignKey, func, Index
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 
 
 class Click(Base):
     __tablename__ = "clicks"
+    __table_args__ = (Index("ix_clicks_url_id_clicked_at", "url_id", "clicked_at"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     url_id: Mapped[int] = mapped_column(
