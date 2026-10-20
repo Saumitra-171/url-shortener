@@ -1,3 +1,5 @@
+[![CI](https://github.com/Saumitra-171/url-shortener/actions/workflows/ci.yml/badge.svg)](https://github.com/Saumitra-171/url-shortener/actions/workflows/ci.yml)
+
 # URL Shortener
 
 A URL shortener API with user accounts, click analytics, and Redis caching, built with FastAPI, PostgreSQL, and Redis.
