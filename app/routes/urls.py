@@ -15,7 +15,7 @@ from app.models.schemas import (
 )
 from app.models.user import User
 from app.services import click_worker, url_service
-
+from app.core.client import client_ip
 from app.core.rate_limit import limit_by_user
 
 router = APIRouter()
@@ -95,7 +95,7 @@ def redirect(short_code: str, request: Request, db: Session = Depends(get_db)):
 
     referrer = request.headers.get("referer")
     user_agent = request.headers.get("user-agent")
-    ip = request.client.host if request.client else None
+    ip = client_ip(request)
     if not click_worker.enqueue_click(url_id, referrer, user_agent, ip):
     # Redis is down: fall back to the old synchronous write so the click is not lost.
         url_service.record_click(db, url_id, referrer, user_agent, ip)

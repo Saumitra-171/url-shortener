@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     secret_key: str  # no default on purpose: the app refuses to start without one
     access_token_expire_minutes: int = 60
     run_click_worker: bool = True
+    trusted_proxy_hops: int = 0
 
 
 settings = Settings()

@@ -9,6 +9,7 @@ from fastapi import Depends, HTTPException, Request
 from app.core.cache import redis_client
 from app.core.deps import get_current_user
 from app.models.user import User
+from app.core.client import client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ def _enforce(key: str, limit: int, window: int) -> None:
 def limit_by_ip(name: str, limit: int, window: int):
     """For anonymous endpoints (register, login)."""
     def dependency(request: Request) -> None:
-        ip = request.client.host if request.client else "unknown"
+        ip = client_ip(request) or "unknown"
         _enforce(f"{name}:ip:{ip}", limit, window)
     return dependency
 
