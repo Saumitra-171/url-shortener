@@ -54,15 +54,6 @@ def ready(db: Session = Depends(get_db)):
         "redis": cache,
     }
 
-@app.get("/debug/ip")  # TEMPORARY: delete after measuring
-def debug_ip(request: Request):
-    return {
-        "peer": request.client.host if request.client else None,
-        "x_forwarded_for": request.headers.get("x-forwarded-for"),
-        "true_client_ip": request.headers.get("true-client-ip"),
-        "cf_connecting_ip": request.headers.get("cf-connecting-ip"),
-    }
-
 
 app.include_router(auth_router)
 app.include_router(url_router, tags=["URLs"])
