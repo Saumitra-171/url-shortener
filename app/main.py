@@ -10,7 +10,7 @@ from app.core.cache import redis_client
 from app.core.database import SessionLocal, get_db
 
 import redis as redis_lib
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -52,6 +52,15 @@ def ready(db: Session = Depends(get_db)):
         "status": "ok" if cache == "up" else "degraded",
         "database": "up",
         "redis": cache,
+    }
+
+@app.get("/debug/ip")  # TEMPORARY: delete after measuring
+def debug_ip(request: Request):
+    return {
+        "peer": request.client.host if request.client else None,
+        "x_forwarded_for": request.headers.get("x-forwarded-for"),
+        "true_client_ip": request.headers.get("true-client-ip"),
+        "cf_connecting_ip": request.headers.get("cf-connecting-ip"),
     }
 
 
