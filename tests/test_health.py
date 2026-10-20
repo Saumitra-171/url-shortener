@@ -36,3 +36,8 @@ def test_ready_fails_when_the_database_is_down(client):
 
     app.dependency_overrides[get_db] = lambda: BrokenSession()  # the client fixture clears this
     assert client.get("/health/ready").status_code == 503
+
+def test_root_redirects_to_the_docs(client):
+    response = client.get("/", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["location"] == "/docs"

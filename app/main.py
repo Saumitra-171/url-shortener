@@ -13,7 +13,7 @@ import redis as redis_lib
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-
+from fastapi.responses import RedirectResponse
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,6 +36,10 @@ app = FastAPI(
 @app.get("/health")
 def health():
     return {"status": "ok", "service": settings.app_name}
+
+@app.get("/", include_in_schema=False)  # hidden from the API docs
+def root():
+    return RedirectResponse(url="/docs", status_code=302)
 
 @app.get("/health/ready")
 def ready(db: Session = Depends(get_db)):
