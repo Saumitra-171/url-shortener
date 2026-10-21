@@ -192,3 +192,13 @@ def get_summary(db: Session, short_code: str, owner_id: int, days: int) -> dict 
         "top_referrers": [{"referrer": r, "clicks": n} for r, n in referrer_rows],
         "browsers": [{"browser": b, "clicks": n} for b, n in browsers.most_common()],
     }
+
+def list_urls(db: Session, owner_id: int, limit: int, offset: int) -> list[URL]:
+    return list(db.scalars(
+        select(URL)
+        .where(URL.owner_id == owner_id)
+        # id is the tie-breaker: several links can share a created_at timestamp
+        .order_by(URL.created_at.desc(), URL.id.desc())
+        .limit(limit)
+        .offset(offset)
+    ))

@@ -131,3 +131,11 @@ class SummaryResponse(BaseModel):
     clicks_per_day: list[DayCount]
     top_referrers: list[ReferrerCount]
     browsers: list[BrowserCount]
+
+class LinkItem(BaseModel):
+    short_code: str
+    short_url: str
+    original_url: str
+    click_count: int
+    created_at: datetime
+    expires_at: datetime | None = None

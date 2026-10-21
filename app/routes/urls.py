@@ -12,6 +12,7 @@ from app.models.schemas import (
     ShortenResponse,
     SummaryResponse,
     URLStats,
+    LinkItem,
 )
 from app.models.user import User
 from app.services import click_worker, url_service
@@ -27,6 +28,7 @@ router = APIRouter()
     status_code=201,
     dependencies=[Depends(limit_by_user("shorten", 10, 60))],
 )
+
 def shorten_url(
     payload: ShortenRequest,
     db: Session = Depends(get_db),
@@ -45,6 +47,26 @@ def shorten_url(
         created_at=url.created_at,
         expires_at=url.expires_at,
     )
+
+@router.get("/urls", response_model=list[LinkItem])
+def list_my_urls(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    urls = url_service.list_urls(db, current_user.id, limit, offset)
+    return [
+        LinkItem(
+            short_code=u.short_code,
+            short_url=f"{settings.base_url}/{u.short_code}",
+            original_url=u.original_url,
+            click_count=u.click_count,
+            created_at=u.created_at,
+            expires_at=u.expires_at,
+        )
+        for u in urls
+    ]
 
 @router.get("/{short_code}/analytics", response_model=AnalyticsResponse)
 def get_analytics(
