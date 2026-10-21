@@ -83,4 +83,12 @@ export const api = {
   login: (email, password) =>
     request("/auth/login", { method: "POST", form: { username: email, password }, auth: false }),
   me: () => request("/auth/me"),
+
+  list: (limit = 50, offset = 0) => request(`/urls?limit=${limit}&offset=${offset}`),
+  create: ({ url, alias, expiresAt }) =>
+    request("/shorten", {
+      method: "POST",
+      body: { url, alias: alias || null, expires_at: expiresAt || null },
+    }),
+  remove: (code) => request(`/${encodeURIComponent(code)}`, { method: "DELETE" }),
 };
