@@ -117,3 +117,34 @@ input:focus-visible, .btn:focus-visible, a:focus-visible {
 .badge { padding: .05rem .5rem; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); }
 .badge-expired { color: var(--danger); background: var(--danger-bg); border-color: transparent; }
 .more { width: 100%; margin-top: 1rem; }
+
+a.btn { text-decoration: none; }
+.back { display: inline-block; margin-bottom: 1rem; font-size: .9rem; }
+.original-line { margin: 0; color: var(--muted); word-break: break-all; }
+
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin: 1rem 0 0; }
+.fact dt { font-size: .8rem; color: var(--muted); }
+.fact dd { margin: 0; font-weight: 600; }
+
+.range { display: flex; gap: .5rem; }
+.btn-ghost[aria-pressed="true"],
+.btn-ghost[aria-pressed="true"]:hover:not(:disabled) {
+  background: var(--primary); color: var(--on-primary); border-color: var(--primary);
+}
+
+.chart { display: block; width: 100%; height: auto; margin-top: .75rem; }
+.chart .bar { fill: var(--primary); }
+.chart .axis { stroke: var(--border); stroke-width: 1; }
+.chart .tick { fill: var(--muted); font-size: 11px; }
+
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+@media (max-width: 700px) { .split { grid-template-columns: 1fr; } }
+.rank { list-style: none; margin: .5rem 0 0; padding: 0; }
+.rank li {
+  position: relative; display: flex; justify-content: space-between; gap: 1rem;
+  margin-bottom: .35rem; padding: .35rem .5rem; font-size: .9rem;
+}
+.rank .fill { position: absolute; inset: 0 auto 0 0; border-radius: 6px; background: var(--border); opacity: .6; }
+.rank span { position: relative; }
+.rank .fill { position: absolute; }
+.rank .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

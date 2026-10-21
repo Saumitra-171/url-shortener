@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
+import { Link } from "react-router-dom";
 
 function formatDate(iso) {
   return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
@@ -62,6 +63,7 @@ export default function LinkRow({ link, onDeleted }) {
       </div>
 
       <div className="link-actions">
+        <Link className="btn btn-ghost btn-sm" to={`/links/${encodeURIComponent(link.short_code)}`}>Stats</Link>
         <button className="btn btn-ghost btn-sm" onClick={copy}>{copied ? "Copied!" : "Copy"}</button>
         {confirming ? (
           <>

@@ -91,4 +91,6 @@ export const api = {
       body: { url, alias: alias || null, expires_at: expiresAt || null },
     }),
   remove: (code) => request(`/${encodeURIComponent(code)}`, { method: "DELETE" }),
+  analytics: (code) => request(`/${encodeURIComponent(code)}/analytics`),
+  summary: (code, days) => request(`/${encodeURIComponent(code)}/analytics/summary?days=${days}`),
 };
